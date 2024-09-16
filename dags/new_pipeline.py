@@ -54,7 +54,7 @@ def send_email(subject, body):
 
 # Define the DAG
 default_args = {
-    'owner': 'airflow',
+    'owner': 'NILESH KISHORE',
     'depends_on_past': False,
     'email_on_failure': True,
     'email_on_retry': False,
@@ -66,7 +66,7 @@ with DAG(
     default_args=default_args,
     description='A pipeline to run data ingestion, preprocessing, training, and drift detection',
     schedule_interval='@daily',  # Adjust this to your schedule needs
-    start_date=days_ago(1),
+    start_date=days_ago(2),
     catchup=False,
 ) as dag:
 
@@ -187,8 +187,8 @@ with DAG(
    )
 
     # Define task dependencies
+    [data_ingestion, data_drift, data_preprocessing, data_profiling,hyperparameter_optimization,model_training,download_model_task,run_docker_script,deploy_on_k8s] >> failure_email
     data_ingestion >> data_drift >> data_preprocessing >> data_profiling
     data_profiling >> hyperparameter_optimization >> model_training
     model_training >> download_model_task >> json_reading
     json_reading >> run_docker_script >> deploy_on_k8s >> success_email
-    [data_ingestion, data_drift, data_preprocessing, data_profiling,hyperparameter_optimization,model_training,download_model_task,run_docker_script,deploy_on_k8s] >> failure_email

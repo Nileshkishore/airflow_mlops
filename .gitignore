@@ -5,3 +5,4 @@
 /mlruns
 /registerd_model
 /venv
+.env

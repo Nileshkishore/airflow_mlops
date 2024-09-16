@@ -1,17 +1,15 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.bash import BashOperator
-from airflow.models import Variable
 from airflow.utils.dates import days_ago
+from airflow.models import Variable
 import os
 from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-
 import sys
-import os
 
 # Add the directory where src/ is located to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -178,12 +176,19 @@ with DAG(
     # Define the Bash script execution task
     run_docker_script = BashOperator(
     task_id='run_bash_docker_script',
-    bash_command=f'cd /home/sigmoid/Documents/airflow_mlops && docker build -t nileshkishore2001/airflow_iris_model:{build_id} .',
+    bash_command=f'cd /home/sigmoid/Documents/airflow_mlops && docker build -t nileshkishore2001/airflow_iris_model:{build_id} . && docker push nileshkishore2001/airflow_iris_model:{build_id}',
+   )
+
+    
+    # Define the Bash script execution task
+    deploy_on_k8s = BashOperator(
+    task_id='deploy_on_k8s',
+    bash_command=f"""cd /home/sigmoid/Documents/airflow_mlops && sed -e 's|<DOCKER_IMAGE_TAGGED>|nileshkishore2001/airflow_iris_model:{build_id}|' k8s/combined-deployment-and-service.yaml > k8s/deployment-final.yaml""",
    )
 
     # Define task dependencies
     data_ingestion >> data_drift >> data_preprocessing >> data_profiling
     data_profiling >> hyperparameter_optimization >> model_training
     model_training >> download_model_task >> json_reading
-    json_reading >> run_docker_script >> success_email
-    [data_ingestion, data_drift, data_preprocessing, data_profiling,hyperparameter_optimization,model_training,download_model_task,run_docker_script] >> failure_email
+    json_reading >> run_docker_script >> deploy_on_k8s >> success_email
+    [data_ingestion, data_drift, data_preprocessing, data_profiling,hyperparameter_optimization,model_training,download_model_task,run_docker_script,deploy_on_k8s] >> failure_email

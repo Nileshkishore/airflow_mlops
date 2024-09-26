@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: custom-model-container
-        image: nileshkishore2001/airflow_iris_model:latest 
+        image: gcr.io/nileshproject-435805/airflow_iris_model:latest 
         ports:
         - containerPort: 5000
         imagePullPolicy: Always

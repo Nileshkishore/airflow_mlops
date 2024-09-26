@@ -54,7 +54,7 @@ def send_email(subject, body):
 
 # Define the DAG
 default_args = {
-    'owner': 'airflow',
+    'owner': 'NILESHKISHORE',
     'depends_on_past': False,
     'email_on_failure': True,
     'email_on_retry': False,
@@ -62,12 +62,12 @@ default_args = {
 }
 
 with DAG(
-    dag_id='mlops_pipeline',
+    dag_id='pipeline_mlops_gcr',
     default_args=default_args,
     description='A pipeline to run data ingestion, preprocessing, training, and drift detection',
     schedule_interval='@daily',  # Adjust this to your schedule needs
     start_date=days_ago(1),
-    catchup=True,
+    catchup=False,
 ) as dag:
 
     def run_data_ingestion():
@@ -171,24 +171,38 @@ with DAG(
         trigger_rule='one_failed'  # Send failure email if any task fails
     )
     # Get the build ID from Airflow variables
-    build_id = Variable.get('build_id', default_var='latest')  # Provide a default value if needed
+    build_id = Variable.get('run_id', default_var='latest')  # Provide a default value if needed
 
     # Define the Bash script execution task
     run_docker_script = BashOperator(
     task_id='run_bash_docker_script',
-    bash_command=f'cd /home/sigmoid/Documents/airflow_mlops && docker build -t nileshkishore2001/airflow_iris_model:{build_id} . && docker push nileshkishore2001/airflow_iris_model:{build_id}',
+    bash_command=f'cd /home/sigmoid/Documents/airflow_mlops && docker build -t gcr.io/nileshproject-435805/airflow_iris_model:{build_id} . && docker push gcr.io/nileshproject-435805/airflow_iris_model:{build_id}',
    )
 
     
     # Define the Bash script execution task
     deploy_on_k8s = BashOperator(
     task_id='deploy_on_k8s',
-    bash_command=f"""cd /home/sigmoid/Documents/airflow_mlops && sed -e 's|<DOCKER_IMAGE_TAGGED>|nileshkishore2001/airflow_iris_model:{build_id}|' k8s/combined-deployment-and-service.yaml > k8s/deployment-final.yaml""",
+    bash_command=f"""cd /home/sigmoid/Documents/airflow_mlops && sed -e 's|<DOCKER_IMAGE_TAGGED>|gcr.io/nileshproject-435805/airflow_iris_model:{build_id}|' k8s/combined-deployment-and-service.yaml > k8s/deployment-final.yaml""",
    )
+    
+    credential_cluster= BashOperator(
+        task_id='credential_cluster',
+        bash_command="gcloud container clusters get-credentials my-cluster-nilesh --zone us-central1-a"
+    )
 
+    # # Apply Kubernetes Service
+    # apply_workload = BashOperator(
+    # task_id='deploy_on_gke',
+    # bash_command=(
+    #     'gcloud auth activate-service-account --key-file /home/sigmoid/Documents/airflow_mlops/nileshproject-435805-6f719ed47122.json && '
+    #     'gcloud container clusters get-credentials my-cluster-nilesh --zone us-central1-a --project nileshproject-435805 && '
+    #     'kubectl apply -f /home/sigmoid/Documents/airflow_mlops/k8s/deployment-final.yaml'
+    # ),
+    # )
     # Define task dependencies
+    [data_ingestion, data_drift, data_preprocessing, data_profiling,hyperparameter_optimization,model_training,download_model_task,run_docker_script,deploy_on_k8s,credential_cluster] >> failure_email
     data_ingestion >> data_drift >> data_preprocessing >> data_profiling
     data_profiling >> hyperparameter_optimization >> model_training
     model_training >> download_model_task >> json_reading
-    json_reading >> run_docker_script >> deploy_on_k8s >> success_email
-    [data_ingestion, data_drift, data_preprocessing, data_profiling,hyperparameter_optimization,model_training,download_model_task,run_docker_script,deploy_on_k8s] >> failure_email
+    json_reading >> run_docker_script >> deploy_on_k8s>> credential_cluster  >> success_email
